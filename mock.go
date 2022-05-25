@@ -148,6 +148,7 @@ func parseLine(line string, envMap map[string]string) (key string, value string,
 
 	key = exportRegex.ReplaceAllString(splitString[0], "$1")
 
+	key = strings.ToUpper(key)
 	// load the value
 	value = parseValue(splitString[1], envMap)
 	return
