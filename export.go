@@ -17,30 +17,30 @@ var (
 	expandVarRegex     = regexp.MustCompile(`(\\)?(\$)(\()?\{?([A-Z0-9_]+)?\}?`)
 )
 
-type mockConfig struct {
+type exportConfig struct {
 	Overload bool
 	Files    []string
 }
 
-type MockOption func(*mockConfig)
+type ExportOption func(*exportConfig)
 
-func WithOverload(overload bool) MockOption {
-	return func(o *mockConfig) {
+func WithOverload(overload bool) ExportOption {
+	return func(o *exportConfig) {
 		o.Overload = overload
 	}
 }
 
-func WithFiles(files ...string) MockOption {
-	return func(o *mockConfig) {
+func WithFiles(files ...string) ExportOption {
+	return func(o *exportConfig) {
 		if len(files) > 0 {
 			o.Files = files
 		}
 	}
 }
 
-func Mock(opts ...MockOption) (err error) {
+func Export(opts ...ExportOption) (err error) {
 	// 设置配置
-	cfg := mockConfig{
+	cfg := exportConfig{
 		Overload: false,
 		Files:    []string{".env"},
 	}
