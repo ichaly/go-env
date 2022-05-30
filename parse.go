@@ -2,8 +2,11 @@ package env
 
 import (
 	"fmt"
+	"os"
 	"reflect"
+	"strconv"
 	"strings"
+	"time"
 )
 
 type parseConfig struct {
@@ -12,12 +15,43 @@ type parseConfig struct {
 
 type ParseOption func(*parseConfig)
 
-func WithIgnorePrefix(strictMode bool) ParseOption {
+func WithIgnorePrefix(ignorePrefix bool) ParseOption {
 	return func(o *parseConfig) {
-		o.IgnorePrefix = strictMode
+		o.IgnorePrefix = ignorePrefix
 	}
 }
 
+type tag struct {
+	Keys     []string
+	Default  string
+	Required bool
+}
+
+func parseTag(tagString string) tag {
+	var t tag
+	envKeys := strings.Split(tagString, ",")
+	for _, key := range envKeys {
+		if strings.Contains(key, "=") {
+			keyData := strings.SplitN(key, "=", 2)
+			switch strings.ToLower(keyData[0]) {
+			case "default":
+				t.Default = keyData[1]
+			case "required":
+				t.Required = strings.ToLower(keyData[1]) == "true"
+			default:
+				// just ignoring unsupported keys
+				continue
+			}
+		} else {
+			t.Keys = append(t.Keys, key)
+		}
+	}
+	return t
+}
+
+//https://github.com/timest/env.git
+//https://github.com/Netflix/go-env.git
+//https://github.com/sethvargo/go-envconfig.git
 func Parse(v interface{}, opts ...ParseOption) error {
 	// 校验参数
 	rv := reflect.Indirect(reflect.ValueOf(v))
@@ -31,13 +65,231 @@ func Parse(v interface{}, opts ...ParseOption) error {
 	for _, o := range opts {
 		o(&cfg)
 	}
-	prefix := strings.ToUpper(rv.Type().Name())
-	if cfg.IgnorePrefix {
-		prefix = ""
+	var prefixes []string
+	if !cfg.IgnorePrefix {
+		prefixes = append(prefixes, strings.ToUpper(rv.Type().Name()))
 	}
-	return fill(prefix, rv)
+	return unmarshal(prefixes, rv, cfg)
 }
 
-func fill(prefix string, rv reflect.Value) error {
+func unmarshal(prefixes []string, rv reflect.Value, cfg parseConfig) error {
+	for i := 0; i < rv.NumField(); i++ {
+		valueField := rv.Field(i)
+		if !valueField.CanSet() {
+			return fmt.Errorf("field must be exported")
+		}
+
+		typeField := rv.Type().Field(i)
+		switch valueField.Kind() {
+		case reflect.Struct:
+			err := unmarshal(append(prefixes, strings.ToUpper(typeField.Name)), valueField.Field(i), cfg)
+			if err != nil {
+				return err
+			}
+		default:
+			tag := parseTag(typeField.Tag.Get("env"))
+			var ok bool
+			var key string
+			var value string
+			for _, k := range tag.Keys {
+				key = strings.Join(append(prefixes, strings.ToUpper(k)), "_")
+				value, ok = os.LookupEnv(key)
+				if ok {
+					break
+				}
+			}
+			if !ok && tag.Required {
+				return fmt.Errorf("%s is required, but has not been set", key)
+			}
+			if len(value) == 0 {
+				value = tag.Default
+			}
+			if err := fill(valueField, value); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func fill(reflectValue reflect.Value, stringValue string) error {
+	switch reflectValue.Kind() {
+	case reflect.String:
+		reflectValue.SetString(stringValue)
+	case reflect.Bool:
+		v, err := strconv.ParseBool(stringValue)
+		if err != nil {
+			return err
+		}
+		reflectValue.SetBool(v)
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		if reflectValue.Type().String() == "time.Duration" {
+			duration, err := time.ParseDuration(stringValue)
+			if err != nil {
+				return err
+			}
+			reflectValue.Set(reflect.ValueOf(duration))
+			break
+		}
+		v, err := strconv.Atoi(stringValue)
+		if err != nil {
+			return err
+		}
+		reflectValue.SetInt(int64(v))
+	}
+	return nil
+}
+
+func parseBool(v string) (bool, error) {
+	if v == "" {
+		return false, nil
+	}
+	return strconv.ParseBool(v)
+}
+
+func parse(prefix string, f reflect.Value, sf reflect.StructField) error {
+	df := sf.Tag.Get("default")
+	isRequire, err := parseBool(sf.Tag.Get("require"))
+	if err != nil {
+		return fmt.Errorf("the value of %s is not a valid `member` of bool ，only "+
+			"[1 0 t f T F true false TRUE FALSE True False] are supported", prefix)
+	}
+	ev, exist := os.LookupEnv(prefix)
+
+	if !exist && isRequire {
+		return fmt.Errorf("%s is required, but has not been set", prefix)
+	}
+	if !exist && df != "" {
+		ev = df
+	}
+	//log.Print("ev:", ev)
+	switch f.Kind() {
+	case reflect.String:
+		f.SetString(ev)
+	case reflect.Int:
+		iv, err := strconv.ParseInt(ev, 10, 32)
+		if err != nil {
+			return fmt.Errorf("%s:%s", prefix, err)
+		}
+		f.SetInt(iv)
+	case reflect.Int64:
+		if f.Type().String() == "time.Duration" {
+			t, err := time.ParseDuration(ev)
+			if err != nil {
+				return fmt.Errorf("%s:%s", prefix, err)
+			}
+			f.Set(reflect.ValueOf(t))
+		} else {
+			iv, err := strconv.ParseInt(ev, 10, 64)
+			if err != nil {
+				return fmt.Errorf("%s:%s", prefix, err)
+			}
+			f.SetInt(iv)
+		}
+	case reflect.Uint:
+		uiv, err := strconv.ParseUint(ev, 10, 32)
+		if err != nil {
+			return fmt.Errorf("%s:%s", prefix, err)
+		}
+		f.SetUint(uiv)
+	case reflect.Uint64:
+		uiv, err := strconv.ParseUint(ev, 10, 64)
+		if err != nil {
+			return fmt.Errorf("%s:%s", prefix, err)
+		}
+		f.SetUint(uiv)
+	case reflect.Float32:
+		f32, err := strconv.ParseFloat(ev, 32)
+		if err != nil {
+			return fmt.Errorf("%s:%s", prefix, err)
+		}
+		f.SetFloat(f32)
+	case reflect.Float64:
+		f64, err := strconv.ParseFloat(ev, 64)
+		if err != nil {
+			return fmt.Errorf("%s:%s", prefix, err)
+		}
+		f.SetFloat(f64)
+	case reflect.Bool:
+		b, err := parseBool(ev)
+		if err != nil {
+			return fmt.Errorf("%s:%s", prefix, err)
+		}
+		f.SetBool(b)
+	case reflect.Slice:
+		sep := ";"
+		s, exist := sf.Tag.Lookup("slice_sep")
+		if exist && s != "" {
+			sep = s
+		}
+		vals := strings.Split(ev, sep)
+		switch f.Type() {
+		case reflect.TypeOf([]string{}):
+			f.Set(reflect.ValueOf(vals))
+		case reflect.TypeOf([]int{}):
+			t := make([]int, len(vals))
+			for i, v := range vals {
+				val, err := strconv.ParseInt(v, 10, 32)
+				if err != nil {
+					return fmt.Errorf("%s:%s", prefix, err)
+				}
+				t[i] = int(val)
+			}
+		case reflect.TypeOf([]int64{}):
+			t := make([]int64, len(vals))
+			for i, v := range vals {
+				val, err := strconv.ParseInt(v, 10, 64)
+				if err != nil {
+					return fmt.Errorf("%s:%s", prefix, err)
+				}
+				t[i] = val
+			}
+		case reflect.TypeOf([]uint{}):
+			t := make([]uint, len(vals))
+			for i, v := range vals {
+				val, err := strconv.ParseUint(v, 10, 32)
+				if err != nil {
+					return fmt.Errorf("%s:%s", prefix, err)
+				}
+				t[i] = uint(val)
+			}
+		case reflect.TypeOf([]uint64{}):
+			t := make([]uint64, len(vals))
+			for i, v := range vals {
+				val, err := strconv.ParseUint(v, 10, 64)
+				if err != nil {
+					return fmt.Errorf("%s:%s", prefix, err)
+				}
+				t[i] = val
+			}
+		case reflect.TypeOf([]float32{}):
+			t := make([]float32, len(vals))
+			for i, v := range vals {
+				val, err := strconv.ParseFloat(v, 32)
+				if err != nil {
+					return fmt.Errorf("%s:%s", prefix, err)
+				}
+				t[i] = float32(val)
+			}
+		case reflect.TypeOf([]float64{}):
+			t := make([]float64, len(vals))
+			for i, v := range vals {
+				val, err := strconv.ParseFloat(v, 64)
+				if err != nil {
+					return fmt.Errorf("%s:%s", prefix, err)
+				}
+				t[i] = val
+			}
+		case reflect.TypeOf([]bool{}):
+			t := make([]bool, len(vals))
+			for i, v := range vals {
+				val, err := parseBool(v)
+				if err != nil {
+					return fmt.Errorf("%s:%s", prefix, err)
+				}
+				t[i] = val
+			}
+		}
+	}
 	return nil
 }
