@@ -1,4 +1,4 @@
-package autoload
+package auto
 
 import "github.com/ichaly/go-env"
 

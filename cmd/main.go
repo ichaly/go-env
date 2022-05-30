@@ -2,7 +2,7 @@ package main
 
 import (
 	"github.com/ichaly/go-env"
-	_ "github.com/ichaly/go-env/autoload"
+	_ "github.com/ichaly/go-env/auto"
 	"log"
 	"os"
 )
