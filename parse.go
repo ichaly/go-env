@@ -87,7 +87,12 @@ func unmarshal(prefixes []string, rv reflect.Value, cfg parseConfig) error {
 				return err
 			}
 		default:
-			tag := parseTag(typeField.Tag.Get("env"))
+			tagString := typeField.Tag.Get("env")
+			if len(tagString) == 0 {
+				tagString = strings.ToUpper(typeField.Name)
+			}
+			tag := parseTag(tagString)
+
 			var ok bool
 			var key string
 			var value string
@@ -117,7 +122,7 @@ func fill(reflectValue reflect.Value, stringValue string) error {
 	case reflect.String:
 		reflectValue.SetString(stringValue)
 	case reflect.Bool:
-		v, err := strconv.ParseBool(stringValue)
+		v, err := parseBool(stringValue)
 		if err != nil {
 			return err
 		}

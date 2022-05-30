@@ -10,6 +10,7 @@ import (
 type Config struct {
 	Port     int    `env:"PORT,default=8080"`
 	Username string `env:"USERNAME,required=true"`
+	Cache    bool   `env:"CACHE1"`
 }
 
 func main() {
