@@ -7,10 +7,15 @@ import (
 	"os"
 )
 
+type Redis struct {
+	Password string `env:"PASSWORD,default=redis123"`
+}
 type Config struct {
-	Port     int    `env:"PORT,default=8080"`
-	Username string `env:"USERNAME,required=true"`
-	Cache    bool   `env:"CACHE1"`
+	Port     int     `env:"PORT,default=8080"`
+	Username string  `env:"USERNAME,required=true"`
+	Cache    bool    `env:"CACHE1"`
+	Price    float32 `env:"PRICE,default=0.0"`
+	Server   *Redis
 }
 
 func main() {

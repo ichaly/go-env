@@ -118,29 +118,53 @@ func unmarshal(prefixes []string, rv reflect.Value, cfg parseConfig) error {
 }
 
 func fill(reflectValue reflect.Value, stringValue string) error {
+	reflectType := reflectValue.Type()
 	switch reflectValue.Kind() {
+	case reflect.Bool:
+		if v, err := parseBool(stringValue); err != nil {
+			return err
+		} else {
+			reflectValue.SetBool(v)
+		}
 	case reflect.String:
 		reflectValue.SetString(stringValue)
-	case reflect.Bool:
-		v, err := parseBool(stringValue)
-		if err != nil {
+	case reflect.Float32, reflect.Float64:
+		if v, err := strconv.ParseFloat(stringValue, reflectType.Bits()); err != nil {
 			return err
+		} else {
+			reflectValue.SetFloat(v)
 		}
-		reflectValue.SetBool(v)
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-		if reflectValue.Type().String() == "time.Duration" {
-			duration, err := time.ParseDuration(stringValue)
-			if err != nil {
+		// 如果是时长字段
+		if reflectType.String() == "time.Duration" {
+			if duration, err := time.ParseDuration(stringValue); err != nil {
 				return err
+			} else {
+				reflectValue.Set(reflect.ValueOf(duration))
 			}
-			reflectValue.Set(reflect.ValueOf(duration))
 			break
 		}
-		v, err := strconv.Atoi(stringValue)
-		if err != nil {
+		if v, err := strconv.Atoi(stringValue); err != nil {
 			return err
+		} else {
+			reflectValue.SetInt(int64(v))
 		}
-		reflectValue.SetInt(int64(v))
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
+		if v, err := strconv.ParseUint(stringValue, 0, reflectType.Bits()); err != nil {
+			return err
+		} else {
+			reflectValue.SetUint(v)
+		}
+	case reflect.Ptr:
+		t := reflectValue.Type()
+		ptr := reflect.New(t.Elem())
+		if err := fill(ptr.Elem(), stringValue); err != nil {
+			return err
+		} else {
+			reflectValue.Set(ptr)
+		}
+	case reflect.Map:
+	case reflect.Slice:
 	}
 	return nil
 }
