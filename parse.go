@@ -163,80 +163,15 @@ func fill(reflectValue reflect.Value, stringValue string) error {
 		reflectValue.SetUint(v)
 	case reflect.Slice:
 		vals := strings.Split(stringValue, ",")
-		switch reflectType {
-		case reflect.TypeOf([]string{}):
-			reflectValue.Set(reflect.ValueOf(vals))
-		case reflect.TypeOf([]int{}):
-			t := make([]int, len(vals))
-			for i, v := range vals {
-				val, err := strconv.ParseInt(v, 10, 32)
-				if err != nil {
-					return err
-				}
-				t[i] = int(val)
+		slice := reflect.MakeSlice(reflectType, len(vals), len(vals))
+		for i, v := range vals {
+			v = strings.TrimSpace(v)
+			err := fill(slice.Index(i), v)
+			if err != nil {
+				return err
 			}
-			reflectValue.Set(reflect.ValueOf(t))
-		case reflect.TypeOf([]int64{}):
-			t := make([]int64, len(vals))
-			for i, v := range vals {
-				val, err := strconv.ParseInt(v, 10, 64)
-				if err != nil {
-					return err
-				}
-				t[i] = val
-			}
-			reflectValue.Set(reflect.ValueOf(t))
-		case reflect.TypeOf([]uint{}):
-			t := make([]uint, len(vals))
-			for i, v := range vals {
-				val, err := strconv.ParseUint(v, 10, 32)
-				if err != nil {
-					return err
-				}
-				t[i] = uint(val)
-			}
-			reflectValue.Set(reflect.ValueOf(t))
-		case reflect.TypeOf([]uint64{}):
-			t := make([]uint64, len(vals))
-			for i, v := range vals {
-				val, err := strconv.ParseUint(v, 10, 64)
-				if err != nil {
-					return err
-				}
-				t[i] = val
-			}
-			reflectValue.Set(reflect.ValueOf(t))
-		case reflect.TypeOf([]float32{}):
-			t := make([]float32, len(vals))
-			for i, v := range vals {
-				val, err := strconv.ParseFloat(v, 32)
-				if err != nil {
-					return err
-				}
-				t[i] = float32(val)
-			}
-			reflectValue.Set(reflect.ValueOf(t))
-		case reflect.TypeOf([]float64{}):
-			t := make([]float64, len(vals))
-			for i, v := range vals {
-				val, err := strconv.ParseFloat(v, 64)
-				if err != nil {
-					return err
-				}
-				t[i] = val
-			}
-			reflectValue.Set(reflect.ValueOf(t))
-		case reflect.TypeOf([]bool{}):
-			t := make([]bool, len(vals))
-			for i, v := range vals {
-				val, err := parseBool(v)
-				if err != nil {
-					return err
-				}
-				t[i] = val
-			}
-			reflectValue.Set(reflect.ValueOf(t))
 		}
+		reflectValue.Set(slice)
 	case reflect.Map:
 	}
 	return nil
