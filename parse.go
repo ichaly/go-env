@@ -163,16 +163,38 @@ func fill(reflectValue reflect.Value, stringValue string) error {
 		reflectValue.SetUint(v)
 	case reflect.Slice:
 		vals := strings.Split(stringValue, ",")
-		slice := reflect.MakeSlice(reflectType, len(vals), len(vals))
+		s := reflect.MakeSlice(reflectType, len(vals), len(vals))
 		for i, v := range vals {
 			v = strings.TrimSpace(v)
-			err := fill(slice.Index(i), v)
+			err := fill(s.Index(i), v)
 			if err != nil {
 				return err
 			}
 		}
-		reflectValue.Set(slice)
+		reflectValue.Set(s)
 	case reflect.Map:
+		vals := strings.Split(stringValue, ";")
+		m := reflect.MakeMapWithSize(reflectType, len(vals))
+		for _, val := range vals {
+			pair := strings.SplitN(val, "=", 2)
+			if len(pair) < 2 {
+				return fmt.Errorf("invalid map item")
+			}
+			mKey, mVal := strings.TrimSpace(pair[0]), strings.TrimSpace(pair[1])
+
+			k := reflect.New(reflectType.Key()).Elem()
+			if err := fill(k, mKey); err != nil {
+				return err
+			}
+
+			v := reflect.New(reflectType.Elem()).Elem()
+			if err := fill(v, mVal); err != nil {
+				return err
+			}
+
+			m.SetMapIndex(k, v)
+		}
+		reflectValue.Set(m)
 	}
 	return nil
 }

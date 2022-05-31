@@ -21,6 +21,7 @@ type Config struct {
 	Redis    *Redis
 	Mysql    Mysql
 	Keys     []string
+	Maps     map[int]int
 }
 
 func main() {
