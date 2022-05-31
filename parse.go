@@ -127,19 +127,19 @@ func fill(reflectValue reflect.Value, stringValue string) error {
 	reflectType := reflectValue.Type()
 	switch reflectValue.Kind() {
 	case reflect.Bool:
-		if v, err := parseBool(stringValue); err != nil {
+		v, err := parseBool(stringValue)
+		if err != nil {
 			return err
-		} else {
-			reflectValue.SetBool(v)
 		}
+		reflectValue.SetBool(v)
 	case reflect.String:
 		reflectValue.SetString(stringValue)
 	case reflect.Float32, reflect.Float64:
-		if v, err := strconv.ParseFloat(stringValue, reflectType.Bits()); err != nil {
+		v, err := strconv.ParseFloat(stringValue, reflectType.Bits())
+		if err != nil {
 			return err
-		} else {
-			reflectValue.SetFloat(v)
 		}
+		reflectValue.SetFloat(v)
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 		// 如果是时长字段
 		if reflectType.String() == "time.Duration" {
@@ -150,19 +150,94 @@ func fill(reflectValue reflect.Value, stringValue string) error {
 			}
 			break
 		}
-		if v, err := strconv.Atoi(stringValue); err != nil {
+		v, err := strconv.Atoi(stringValue)
+		if err != nil {
 			return err
-		} else {
-			reflectValue.SetInt(int64(v))
 		}
+		reflectValue.SetInt(int64(v))
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
-		if v, err := strconv.ParseUint(stringValue, 0, reflectType.Bits()); err != nil {
+		v, err := strconv.ParseUint(stringValue, 0, reflectType.Bits())
+		if err != nil {
 			return err
-		} else {
-			reflectValue.SetUint(v)
+		}
+		reflectValue.SetUint(v)
+	case reflect.Slice:
+		vals := strings.Split(stringValue, ",")
+		switch reflectType {
+		case reflect.TypeOf([]string{}):
+			reflectValue.Set(reflect.ValueOf(vals))
+		case reflect.TypeOf([]int{}):
+			t := make([]int, len(vals))
+			for i, v := range vals {
+				val, err := strconv.ParseInt(v, 10, 32)
+				if err != nil {
+					return err
+				}
+				t[i] = int(val)
+			}
+			reflectValue.Set(reflect.ValueOf(t))
+		case reflect.TypeOf([]int64{}):
+			t := make([]int64, len(vals))
+			for i, v := range vals {
+				val, err := strconv.ParseInt(v, 10, 64)
+				if err != nil {
+					return err
+				}
+				t[i] = val
+			}
+			reflectValue.Set(reflect.ValueOf(t))
+		case reflect.TypeOf([]uint{}):
+			t := make([]uint, len(vals))
+			for i, v := range vals {
+				val, err := strconv.ParseUint(v, 10, 32)
+				if err != nil {
+					return err
+				}
+				t[i] = uint(val)
+			}
+			reflectValue.Set(reflect.ValueOf(t))
+		case reflect.TypeOf([]uint64{}):
+			t := make([]uint64, len(vals))
+			for i, v := range vals {
+				val, err := strconv.ParseUint(v, 10, 64)
+				if err != nil {
+					return err
+				}
+				t[i] = val
+			}
+			reflectValue.Set(reflect.ValueOf(t))
+		case reflect.TypeOf([]float32{}):
+			t := make([]float32, len(vals))
+			for i, v := range vals {
+				val, err := strconv.ParseFloat(v, 32)
+				if err != nil {
+					return err
+				}
+				t[i] = float32(val)
+			}
+			reflectValue.Set(reflect.ValueOf(t))
+		case reflect.TypeOf([]float64{}):
+			t := make([]float64, len(vals))
+			for i, v := range vals {
+				val, err := strconv.ParseFloat(v, 64)
+				if err != nil {
+					return err
+				}
+				t[i] = val
+			}
+			reflectValue.Set(reflect.ValueOf(t))
+		case reflect.TypeOf([]bool{}):
+			t := make([]bool, len(vals))
+			for i, v := range vals {
+				val, err := parseBool(v)
+				if err != nil {
+					return err
+				}
+				t[i] = val
+			}
+			reflectValue.Set(reflect.ValueOf(t))
 		}
 	case reflect.Map:
-	case reflect.Slice:
 	}
 	return nil
 }
@@ -172,151 +247,4 @@ func parseBool(v string) (bool, error) {
 		return false, nil
 	}
 	return strconv.ParseBool(v)
-}
-
-func parse(prefix string, f reflect.Value, sf reflect.StructField) error {
-	df := sf.Tag.Get("default")
-	isRequire, err := parseBool(sf.Tag.Get("require"))
-	if err != nil {
-		return fmt.Errorf("the value of %s is not a valid `member` of bool ，only "+
-			"[1 0 t f T F true false TRUE FALSE True False] are supported", prefix)
-	}
-	ev, exist := os.LookupEnv(prefix)
-
-	if !exist && isRequire {
-		return fmt.Errorf("%s is required, but has not been set", prefix)
-	}
-	if !exist && df != "" {
-		ev = df
-	}
-	//log.Print("ev:", ev)
-	switch f.Kind() {
-	case reflect.String:
-		f.SetString(ev)
-	case reflect.Int:
-		iv, err := strconv.ParseInt(ev, 10, 32)
-		if err != nil {
-			return fmt.Errorf("%s:%s", prefix, err)
-		}
-		f.SetInt(iv)
-	case reflect.Int64:
-		if f.Type().String() == "time.Duration" {
-			t, err := time.ParseDuration(ev)
-			if err != nil {
-				return fmt.Errorf("%s:%s", prefix, err)
-			}
-			f.Set(reflect.ValueOf(t))
-		} else {
-			iv, err := strconv.ParseInt(ev, 10, 64)
-			if err != nil {
-				return fmt.Errorf("%s:%s", prefix, err)
-			}
-			f.SetInt(iv)
-		}
-	case reflect.Uint:
-		uiv, err := strconv.ParseUint(ev, 10, 32)
-		if err != nil {
-			return fmt.Errorf("%s:%s", prefix, err)
-		}
-		f.SetUint(uiv)
-	case reflect.Uint64:
-		uiv, err := strconv.ParseUint(ev, 10, 64)
-		if err != nil {
-			return fmt.Errorf("%s:%s", prefix, err)
-		}
-		f.SetUint(uiv)
-	case reflect.Float32:
-		f32, err := strconv.ParseFloat(ev, 32)
-		if err != nil {
-			return fmt.Errorf("%s:%s", prefix, err)
-		}
-		f.SetFloat(f32)
-	case reflect.Float64:
-		f64, err := strconv.ParseFloat(ev, 64)
-		if err != nil {
-			return fmt.Errorf("%s:%s", prefix, err)
-		}
-		f.SetFloat(f64)
-	case reflect.Bool:
-		b, err := parseBool(ev)
-		if err != nil {
-			return fmt.Errorf("%s:%s", prefix, err)
-		}
-		f.SetBool(b)
-	case reflect.Slice:
-		sep := ";"
-		s, exist := sf.Tag.Lookup("slice_sep")
-		if exist && s != "" {
-			sep = s
-		}
-		vals := strings.Split(ev, sep)
-		switch f.Type() {
-		case reflect.TypeOf([]string{}):
-			f.Set(reflect.ValueOf(vals))
-		case reflect.TypeOf([]int{}):
-			t := make([]int, len(vals))
-			for i, v := range vals {
-				val, err := strconv.ParseInt(v, 10, 32)
-				if err != nil {
-					return fmt.Errorf("%s:%s", prefix, err)
-				}
-				t[i] = int(val)
-			}
-		case reflect.TypeOf([]int64{}):
-			t := make([]int64, len(vals))
-			for i, v := range vals {
-				val, err := strconv.ParseInt(v, 10, 64)
-				if err != nil {
-					return fmt.Errorf("%s:%s", prefix, err)
-				}
-				t[i] = val
-			}
-		case reflect.TypeOf([]uint{}):
-			t := make([]uint, len(vals))
-			for i, v := range vals {
-				val, err := strconv.ParseUint(v, 10, 32)
-				if err != nil {
-					return fmt.Errorf("%s:%s", prefix, err)
-				}
-				t[i] = uint(val)
-			}
-		case reflect.TypeOf([]uint64{}):
-			t := make([]uint64, len(vals))
-			for i, v := range vals {
-				val, err := strconv.ParseUint(v, 10, 64)
-				if err != nil {
-					return fmt.Errorf("%s:%s", prefix, err)
-				}
-				t[i] = val
-			}
-		case reflect.TypeOf([]float32{}):
-			t := make([]float32, len(vals))
-			for i, v := range vals {
-				val, err := strconv.ParseFloat(v, 32)
-				if err != nil {
-					return fmt.Errorf("%s:%s", prefix, err)
-				}
-				t[i] = float32(val)
-			}
-		case reflect.TypeOf([]float64{}):
-			t := make([]float64, len(vals))
-			for i, v := range vals {
-				val, err := strconv.ParseFloat(v, 64)
-				if err != nil {
-					return fmt.Errorf("%s:%s", prefix, err)
-				}
-				t[i] = val
-			}
-		case reflect.TypeOf([]bool{}):
-			t := make([]bool, len(vals))
-			for i, v := range vals {
-				val, err := parseBool(v)
-				if err != nil {
-					return fmt.Errorf("%s:%s", prefix, err)
-				}
-				t[i] = val
-			}
-		}
-	}
-	return nil
 }
