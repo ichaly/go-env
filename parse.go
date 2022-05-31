@@ -82,16 +82,14 @@ func unmarshal(prefixes []string, rv reflect.Value) error {
 		fieldType := rv.Type().Field(i)
 		fieldKind := fieldValue.Kind()
 		switch fieldKind {
-		case reflect.Struct:
-			err := unmarshal(append(prefixes, strings.ToUpper(fieldType.Name)), fieldValue)
-			if err != nil {
-				return err
+		case reflect.Struct, reflect.Ptr:
+			reflectValue := fieldValue
+			if fieldKind == reflect.Ptr {
+				reflectValue = reflect.New(fieldValue.Type().Elem())
+				fieldValue.Set(reflectValue)
+				reflectValue = reflectValue.Elem()
 			}
-		case reflect.Ptr:
-			ptr := reflect.New(fieldValue.Type().Elem())
-			err := unmarshal(append(prefixes, strings.ToUpper(fieldType.Name)), ptr.Elem())
-			fieldValue.Set(ptr)
-			if err != nil {
+			if err := unmarshal(append(prefixes, strings.ToUpper(fieldType.Name)), reflectValue); err != nil {
 				return err
 			}
 		default:
