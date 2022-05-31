@@ -74,29 +74,30 @@ func Parse(v interface{}, opts ...ParseOption) error {
 
 func unmarshal(prefixes []string, rv reflect.Value) error {
 	for i := 0; i < rv.NumField(); i++ {
-		valueField := rv.Field(i)
-		if !valueField.CanSet() {
-			return fmt.Errorf("field `%v`must be exported", valueField.String())
+		fieldValue := rv.Field(i)
+		if !fieldValue.CanSet() {
+			return fmt.Errorf("field `%v`must be exported", fieldValue.String())
 		}
 
-		typeField := rv.Type().Field(i)
-		switch valueField.Kind() {
+		fieldType := rv.Type().Field(i)
+		fieldKind := fieldValue.Kind()
+		switch fieldKind {
 		case reflect.Struct:
-			err := unmarshal(append(prefixes, strings.ToUpper(typeField.Name)), valueField)
+			err := unmarshal(append(prefixes, strings.ToUpper(fieldType.Name)), fieldValue)
 			if err != nil {
 				return err
 			}
 		case reflect.Ptr:
-			ptr := reflect.New(valueField.Type().Elem())
-			err := unmarshal(append(prefixes, strings.ToUpper(typeField.Name)), ptr.Elem())
-			valueField.Set(ptr)
+			ptr := reflect.New(fieldValue.Type().Elem())
+			err := unmarshal(append(prefixes, strings.ToUpper(fieldType.Name)), ptr.Elem())
+			fieldValue.Set(ptr)
 			if err != nil {
 				return err
 			}
 		default:
-			tagString := typeField.Tag.Get("env")
+			tagString := fieldType.Tag.Get("env")
 			if len(tagString) == 0 {
-				tagString = strings.ToUpper(typeField.Name)
+				tagString = strings.ToUpper(fieldType.Name)
 			}
 			tag := parseTag(tagString)
 
@@ -116,7 +117,7 @@ func unmarshal(prefixes []string, rv reflect.Value) error {
 			if len(value) == 0 {
 				value = tag.Default
 			}
-			if err := fill(valueField, value); err != nil {
+			if err := fill(fieldValue, value); err != nil {
 				return err
 			}
 		}
