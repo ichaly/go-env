@@ -20,6 +20,7 @@ type Config struct {
 	Price    float32 `env:"PRICE,default=0.0"`
 	Redis    *Redis
 	Mysql    Mysql
+	Keys     []float64
 }
 
 func main() {
