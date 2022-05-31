@@ -49,9 +49,6 @@ func parseTag(tagString string) tag {
 	return t
 }
 
-//https://github.com/timest/env.git
-//https://github.com/Netflix/go-env.git
-//https://github.com/sethvargo/go-envconfig.git
 func Parse(v interface{}, opts ...ParseOption) error {
 	// 校验参数
 	rv := reflect.Indirect(reflect.ValueOf(v))
