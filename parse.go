@@ -69,20 +69,27 @@ func Parse(v interface{}, opts ...ParseOption) error {
 	if !cfg.IgnorePrefix {
 		prefixes = append(prefixes, strings.ToUpper(rv.Type().Name()))
 	}
-	return unmarshal(prefixes, rv, cfg)
+	return unmarshal(prefixes, rv)
 }
 
-func unmarshal(prefixes []string, rv reflect.Value, cfg parseConfig) error {
+func unmarshal(prefixes []string, rv reflect.Value) error {
 	for i := 0; i < rv.NumField(); i++ {
 		valueField := rv.Field(i)
 		if !valueField.CanSet() {
-			return fmt.Errorf("field must be exported")
+			return fmt.Errorf("field `%v`must be exported", valueField.String())
 		}
 
 		typeField := rv.Type().Field(i)
 		switch valueField.Kind() {
 		case reflect.Struct:
-			err := unmarshal(append(prefixes, strings.ToUpper(typeField.Name)), valueField.Field(i), cfg)
+			err := unmarshal(append(prefixes, strings.ToUpper(typeField.Name)), valueField)
+			if err != nil {
+				return err
+			}
+		case reflect.Ptr:
+			ptr := reflect.New(valueField.Type().Elem())
+			err := unmarshal(append(prefixes, strings.ToUpper(typeField.Name)), ptr.Elem())
+			valueField.Set(ptr)
 			if err != nil {
 				return err
 			}
@@ -154,14 +161,6 @@ func fill(reflectValue reflect.Value, stringValue string) error {
 			return err
 		} else {
 			reflectValue.SetUint(v)
-		}
-	case reflect.Ptr:
-		t := reflectValue.Type()
-		ptr := reflect.New(t.Elem())
-		if err := fill(ptr.Elem(), stringValue); err != nil {
-			return err
-		} else {
-			reflectValue.Set(ptr)
 		}
 	case reflect.Map:
 	case reflect.Slice:

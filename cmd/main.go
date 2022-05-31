@@ -10,12 +10,16 @@ import (
 type Redis struct {
 	Password string `env:"PASSWORD,default=redis123"`
 }
+type Mysql struct {
+	Password string `env:"PASSWORD,default=mysql123"`
+}
 type Config struct {
 	Port     int     `env:"PORT,default=8080"`
 	Username string  `env:"USERNAME,required=true"`
 	Cache    bool    `env:"CACHE1"`
 	Price    float32 `env:"PRICE,default=0.0"`
-	Server   *Redis
+	Redis    *Redis
+	Mysql    Mysql
 }
 
 func main() {
@@ -28,5 +32,5 @@ func main() {
 		panic(err)
 		return
 	}
-	log.Printf("*****>>>%v", cfg)
+	log.Printf("%v*****>>>%v", cfg, cfg.Redis.Password)
 }
